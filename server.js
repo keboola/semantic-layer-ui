@@ -27,15 +27,30 @@ const upload = multer
 app.use(express.json({ limit: "10mb" }));
 
 // Env vars
-// Derive metastore region from KBC_URL (injected by Keboola platform) so the app
-// works on any stack without manual configuration. METASTORE_URL overrides if set.
-const _kbcUrl = process.env.KBC_URL || "";
-const _gcpRegion = (_kbcUrl.match(/connection\.([\w-]+)\.gcp\.keboola\.com/) || [])[1];
+// Derive metastore region from KBC_URL or KBC_STACKID (both injected by the platform).
+// METASTORE_URL env var overrides if explicitly set.
+const _stackRef = process.env.KBC_URL || process.env.KBC_STACKID || "";
+const _gcpRegion = (_stackRef.match(/connection\.([\w-]+)\.gcp\.keboola\.com/) || [])[1];
 const _defaultMetastore = _gcpRegion
   ? `https://metastore.${_gcpRegion}.gcp.keboola.com`
   : "https://metastore.us-east4.gcp.keboola.com";
 const METASTORE_URL = (process.env.METASTORE_URL || _defaultMetastore).trim();
-const KBC_TOKEN = (process.env.KBC_METASTORE_TOKEN || process.env.KBC_TOKEN || "").trim();
+
+// Metastore token resolution order:
+//   1. KBC_METASTORE_TOKEN env var (explicit override)
+//   2. KBC_CONFIG_DATA parameters (Keboola injects full config JSON at runtime)
+//   3. KBC_TOKEN (platform-injected service token — may lack metastore scope)
+let _metastoreToken = process.env.KBC_METASTORE_TOKEN || "";
+if (!_metastoreToken) {
+  try {
+    const _cfg = process.env.KBC_CONFIG_DATA ? JSON.parse(process.env.KBC_CONFIG_DATA) : {};
+    _metastoreToken =
+      _cfg?.parameters?.KBC_METASTORE_TOKEN ||
+      _cfg?.parameters?.["#KBC_METASTORE_TOKEN"] ||
+      "";
+  } catch (_) {}
+}
+const KBC_TOKEN = (_metastoreToken || process.env.KBC_TOKEN || "").trim();
 
 // ─── Health & Auth ───────────────────────────────────────────────────────────
 
