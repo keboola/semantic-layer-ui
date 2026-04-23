@@ -27,8 +27,14 @@ const upload = multer
 app.use(express.json({ limit: "10mb" }));
 
 // Env vars
-const METASTORE_URL =
-  (process.env.METASTORE_URL || "https://metastore.us-east4.gcp.keboola.com").trim();
+// Derive metastore region from KBC_URL (injected by Keboola platform) so the app
+// works on any stack without manual configuration. METASTORE_URL overrides if set.
+const _kbcUrl = process.env.KBC_URL || "";
+const _gcpRegion = (_kbcUrl.match(/connection\.([\w-]+)\.gcp\.keboola\.com/) || [])[1];
+const _defaultMetastore = _gcpRegion
+  ? `https://metastore.${_gcpRegion}.gcp.keboola.com`
+  : "https://metastore.us-east4.gcp.keboola.com";
+const METASTORE_URL = (process.env.METASTORE_URL || _defaultMetastore).trim();
 const KBC_TOKEN = (process.env.KBC_METASTORE_TOKEN || process.env.KBC_TOKEN || "").trim();
 
 // ─── Health & Auth ───────────────────────────────────────────────────────────
