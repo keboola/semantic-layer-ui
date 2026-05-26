@@ -1,13 +1,14 @@
 import { useParams, Link, useNavigate } from "react-router";
-import { useMetric, useMetrics, useUpdateMetric, useDeleteMetric } from "@/hooks/use-metrics";
+import { useMetric, useMetrics, useUpdateMetric, useDeleteMetric, useCompiledMetric } from "@/hooks/use-metrics";
 import { useDatasets } from "@/hooks/use-datasets";
 import { useModel } from "@/providers/model-context";
-import { ArrowLeft, Save, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Save, Pencil, Trash2, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { ObjectMetaPanel } from "@/components/shared/object-meta";
 import { sql } from "@codemirror/lang-sql";
 import { cn } from "@/lib/utils";
+import { STRUCTURED_METRICS_ENABLED } from "@/lib/constants";
 
 export function MetricDetailPage() {
   const { uuid } = useParams<{ uuid: string }>();
@@ -195,6 +196,10 @@ export function MetricDetailPage() {
         )}
       </div>
 
+      {STRUCTURED_METRICS_ENABLED && m.mode === "structured" && uuid && (
+        <CompiledSqlPanel uuid={uuid} />
+      )}
+
       {editing && (
         <div className="flex gap-2">
           <button
@@ -236,6 +241,47 @@ export function MetricDetailPage() {
 
       {/* Metadata */}
       <ObjectMetaPanel meta={metric.meta} uuid={metric.id} />
+    </div>
+  );
+}
+
+function CompiledSqlPanel({ uuid }: { uuid: string }) {
+  const { data, isLoading, error } = useCompiledMetric(uuid);
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(!open)}
+        className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+      >
+        <ChevronRight className={cn("h-3 w-3 transition-transform", open && "rotate-90")} />
+        Compiled SQL {data?.compiled && `(v${data.compiled.compiledVersion})`}
+      </button>
+      {open && (
+        <div className="mt-2">
+          {isLoading && <p className="text-xs text-muted-foreground">Compiling...</p>}
+          {error && (
+            <pre className="text-xs text-destructive bg-destructive/5 p-2 rounded whitespace-pre-wrap">
+              {error instanceof Error ? error.message : String(error)}
+            </pre>
+          )}
+          {data?.compiled && (
+            <>
+              {data.compiled.warnings.length > 0 && (
+                <ul className="mb-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 list-disc pl-5">
+                  {data.compiled.warnings.map((w, i) => (
+                    <li key={i}><strong>{w.code}:</strong> {w.message}</li>
+                  ))}
+                </ul>
+              )}
+              <pre className="text-xs font-mono bg-muted p-3 rounded overflow-x-auto whitespace-pre-wrap">
+                {data.compiled.sql}
+              </pre>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
