@@ -9,6 +9,7 @@ import { useMemo, useState } from "react";
 import { ArrowUpDown, Plus, X } from "lucide-react";
 import CodeMirror from "@uiw/react-codemirror";
 import { sql } from "@codemirror/lang-sql";
+import { StructuredMetricForm } from "@/components/metrics/structured-metric-form";
 
 type SortKey = "name" | "dataset" | "updated";
 
@@ -27,6 +28,7 @@ export function MetricsPage() {
   const [sortBy, setSortBy] = useState<SortKey>("name");
   const [sortAsc, setSortAsc] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [createMode, setCreateMode] = useState<"raw" | "structured">("raw");
   const [newName, setNewName] = useState("");
   const [newSql, setNewSql] = useState("");
   const [newDesc, setNewDesc] = useState("");
@@ -167,51 +169,75 @@ export function MetricsPage() {
 
       {/* Create Metric Form */}
       {showCreate && (
-        <div className="border border-primary/30 bg-primary/5 rounded-lg p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium">New Metric</h3>
-            <button onClick={() => setShowCreate(false)} className="text-muted-foreground hover:text-foreground">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="text-xs font-medium block mb-1">Name</label>
-              <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="metric_name" className="w-full px-2 py-1.5 text-sm border border-input rounded-md bg-background" />
+        <>
+          {STRUCTURED_METRICS_ENABLED && (
+            <div className="flex gap-1 text-xs">
+              {(["raw", "structured"] as const).map((mf) => (
+                <button
+                  key={mf}
+                  onClick={() => setCreateMode(mf)}
+                  className={cn(
+                    "px-3 py-1 rounded border",
+                    createMode === mf
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border hover:bg-accent",
+                  )}
+                >
+                  {mf === "raw" ? "Quick SQL" : "Structured"}
+                </button>
+              ))}
             </div>
-            <div>
-              <label className="text-xs font-medium block mb-1">Dataset</label>
-              <select value={newDataset} onChange={(e) => setNewDataset(e.target.value)} className="w-full px-2 py-1.5 text-sm border border-input rounded-md bg-background">
-                <option value="">Select dataset...</option>
-                {datasets?.map((d) => (
-                  <option key={d.id} value={d.attributes.tableId}>{d.attributes.name}</option>
-                ))}
-              </select>
+          )}
+          {createMode === "structured" && STRUCTURED_METRICS_ENABLED ? (
+            <StructuredMetricForm modelUUID={modelUUID} onClose={() => setShowCreate(false)} />
+          ) : (
+            <div className="border border-primary/30 bg-primary/5 rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium">New Metric</h3>
+                <button onClick={() => setShowCreate(false)} className="text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-medium block mb-1">Name</label>
+                  <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="metric_name" className="w-full px-2 py-1.5 text-sm border border-input rounded-md bg-background" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium block mb-1">Dataset</label>
+                  <select value={newDataset} onChange={(e) => setNewDataset(e.target.value)} className="w-full px-2 py-1.5 text-sm border border-input rounded-md bg-background">
+                    <option value="">Select dataset...</option>
+                    {datasets?.map((d) => (
+                      <option key={d.id} value={d.attributes.tableId}>{d.attributes.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium block mb-1">Description</label>
+                  <input value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="What does this metric measure?" className="w-full px-2 py-1.5 text-sm border border-input rounded-md bg-background" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">SQL Expression</label>
+                <div className="border border-input rounded-md overflow-hidden">
+                  <CodeMirror value={newSql} onChange={setNewSql} extensions={[sql()]} height="80px" theme="light" />
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  if (!newName || !newSql) return;
+                  createMetric.mutate({ modelUUID, name: newName, sql: newSql, description: newDesc, dataset: newDataset || undefined }, {
+                    onSuccess: () => { setShowCreate(false); setNewName(""); setNewSql(""); setNewDesc(""); setNewDataset(""); },
+                  });
+                }}
+                disabled={!newName || !newSql || createMetric.isPending}
+                className="px-4 py-1.5 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+              >
+                {createMetric.isPending ? "Creating..." : "Create Metric"}
+              </button>
             </div>
-            <div>
-              <label className="text-xs font-medium block mb-1">Description</label>
-              <input value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="What does this metric measure?" className="w-full px-2 py-1.5 text-sm border border-input rounded-md bg-background" />
-            </div>
-          </div>
-          <div>
-            <label className="text-xs font-medium block mb-1">SQL Expression</label>
-            <div className="border border-input rounded-md overflow-hidden">
-              <CodeMirror value={newSql} onChange={setNewSql} extensions={[sql()]} height="80px" theme="light" />
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              if (!newName || !newSql) return;
-              createMetric.mutate({ modelUUID, name: newName, sql: newSql, description: newDesc, dataset: newDataset || undefined }, {
-                onSuccess: () => { setShowCreate(false); setNewName(""); setNewSql(""); setNewDesc(""); setNewDataset(""); },
-              });
-            }}
-            disabled={!newName || !newSql || createMetric.isPending}
-            className="px-4 py-1.5 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
-          >
-            {createMetric.isPending ? "Creating..." : "Create Metric"}
-          </button>
-        </div>
+          )}
+        </>
       )}
 
       <div className="border border-border rounded-lg overflow-x-auto">
