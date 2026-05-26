@@ -1,5 +1,5 @@
 import { useParams, Link, useNavigate } from "react-router";
-import { useMetric, useUpdateMetric, useDeleteMetric } from "@/hooks/use-metrics";
+import { useMetric, useMetrics, useUpdateMetric, useDeleteMetric } from "@/hooks/use-metrics";
 import { useDatasets } from "@/hooks/use-datasets";
 import { useModel } from "@/providers/model-context";
 import { ArrowLeft, Save, Pencil, Trash2 } from "lucide-react";
@@ -14,6 +14,7 @@ export function MetricDetailPage() {
   const { data: metric, isLoading } = useMetric(uuid || "");
   const { modelUUID } = useModel();
   const { data: datasets } = useDatasets(modelUUID);
+  const { data: allMetrics } = useMetrics(modelUUID);
   const navigate = useNavigate();
   const updateMetric = useUpdateMetric();
   const deleteMetric = useDeleteMetric();
@@ -27,6 +28,14 @@ export function MetricDetailPage() {
   }
 
   const m = metric.attributes;
+
+  const dependsOnMetrics = (m.dependsOn ?? [])
+    .map((depUuid) => allMetrics?.find((mm) => mm.id === depUuid))
+    .filter((mm): mm is NonNullable<typeof mm> => mm !== undefined);
+
+  const usedByMetrics = (allMetrics ?? []).filter(
+    (mm) => uuid && mm.attributes.dependsOn?.includes(uuid),
+  );
 
   function startEdit() {
     setEditSql(m.sql);
@@ -109,6 +118,40 @@ export function MetricDetailPage() {
                     </span>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {m.mode === "structured" && dependsOnMetrics.length > 0 && (
+            <div className="mt-2">
+              <h3 className="text-xs font-medium text-muted-foreground mb-1">Depends on</h3>
+              <div className="flex gap-1.5 flex-wrap">
+                {dependsOnMetrics.map((dep) => (
+                  <Link
+                    key={dep.id}
+                    to={`/metrics/${dep.id}`}
+                    className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded hover:underline"
+                  >
+                    {dep.attributes.name}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {usedByMetrics.length > 0 && (
+            <div className="mt-2">
+              <h3 className="text-xs font-medium text-muted-foreground mb-1">Used by</h3>
+              <div className="flex gap-1.5 flex-wrap">
+                {usedByMetrics.map((u) => (
+                  <Link
+                    key={u.id}
+                    to={`/metrics/${u.id}`}
+                    className="text-xs bg-muted px-2 py-0.5 rounded hover:underline"
+                  >
+                    {u.attributes.name}
+                  </Link>
+                ))}
               </div>
             </div>
           )}
