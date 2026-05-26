@@ -2,7 +2,8 @@ import { useMetrics, useCreateMetric } from "@/hooks/use-metrics";
 import { useDatasets } from "@/hooks/use-datasets";
 import { useModel } from "@/providers/model-context";
 import { Link } from "react-router";
-import { truncate } from "@/lib/utils";
+import { truncate, cn } from "@/lib/utils";
+import { STRUCTURED_METRICS_ENABLED } from "@/lib/constants";
 import { RevisionBadge } from "@/components/shared/object-meta";
 import { useMemo, useState } from "react";
 import { ArrowUpDown, Plus, X } from "lucide-react";
@@ -22,6 +23,7 @@ export function MetricsPage() {
   const { data: datasets } = useDatasets(modelUUID);
   const [search, setSearch] = useState("");
   const [datasetFilter, setDatasetFilter] = useState<string>("");
+  const [modeFilter, setModeFilter] = useState<"" | "raw" | "structured">("");
   const [sortBy, setSortBy] = useState<SortKey>("name");
   const [sortAsc, setSortAsc] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -34,8 +36,13 @@ export function MetricsPage() {
   const datasetCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const m of metrics || []) {
-      const key = m.attributes.dataset || "__none__";
-      counts[key] = (counts[key] || 0) + 1;
+      const keys =
+        m.attributes.datasets && m.attributes.datasets.length > 0
+          ? m.attributes.datasets
+          : m.attributes.dataset
+            ? [m.attributes.dataset]
+            : ["__none__"];
+      for (const k of keys) counts[k] = (counts[k] || 0) + 1;
     }
     return counts;
   }, [metrics]);
@@ -43,12 +50,19 @@ export function MetricsPage() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     let result = (metrics || []).filter((m) => {
-      if (datasetFilter && (m.attributes.dataset || "") !== datasetFilter) return false;
+      if (modeFilter && (m.attributes.mode ?? "raw") !== modeFilter) return false;
+      if (datasetFilter) {
+        const touches =
+          m.attributes.dataset === datasetFilter ||
+          m.attributes.datasets?.includes(datasetFilter) ||
+          (datasetFilter === "__none__" && !m.attributes.dataset && (!m.attributes.datasets || m.attributes.datasets.length === 0));
+        if (!touches) return false;
+      }
       if (!q) return true;
       return (
         m.attributes.name.toLowerCase().includes(q) ||
         (m.attributes.description || "").toLowerCase().includes(q) ||
-        m.attributes.sql.toLowerCase().includes(q)
+        ((m.attributes.sql || m.attributes.expression || "")).toLowerCase().includes(q)
       );
     });
 
@@ -62,7 +76,7 @@ export function MetricsPage() {
     });
 
     return result;
-  }, [metrics, search, datasetFilter, sortBy, sortAsc]);
+  }, [metrics, search, datasetFilter, modeFilter, sortBy, sortAsc]);
 
   function toggleSort(key: SortKey) {
     if (sortBy === key) setSortAsc(!sortAsc);
@@ -96,6 +110,25 @@ export function MetricsPage() {
           </span>
         </h2>
         <div className="flex gap-2 flex-wrap">
+          {STRUCTURED_METRICS_ENABLED && (
+            <div className="flex items-center gap-1 text-xs">
+              <span className="text-muted-foreground">Mode:</span>
+              {(["", "raw", "structured"] as const).map((mf) => (
+                <button
+                  key={mf || "all"}
+                  onClick={() => setModeFilter(mf)}
+                  className={cn(
+                    "px-2 py-0.5 rounded border",
+                    modeFilter === mf
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border hover:bg-accent",
+                  )}
+                >
+                  {mf || "all"}
+                </button>
+              ))}
+            </div>
+          )}
           <select
             value={datasetFilter}
             onChange={(e) => setDatasetFilter(e.target.value)}
@@ -191,6 +224,9 @@ export function MetricsPage() {
               >
                 Name {sortBy === "name" && <ArrowUpDown className="h-3 w-3 inline ml-0.5" />}
               </th>
+              {STRUCTURED_METRICS_ENABLED && (
+                <th className="text-left px-3 py-2 font-medium w-[80px]">Mode</th>
+              )}
               <th className="text-left px-3 py-2 font-medium">SQL</th>
               <th
                 className="text-left px-3 py-2 font-medium w-[160px] cursor-pointer hover:text-primary"
@@ -228,12 +264,26 @@ export function MetricsPage() {
                       </span>
                     )}
                   </td>
+                  {STRUCTURED_METRICS_ENABLED && (
+                    <td className="px-3 py-2.5 align-top">
+                      <span
+                        className={cn(
+                          "text-[10px] uppercase font-mono px-1.5 py-0.5 rounded",
+                          m.attributes.mode === "structured"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {m.attributes.mode ?? "raw"}
+                      </span>
+                    </td>
+                  )}
                   <td className="px-3 py-2.5 align-top">
                     <code
                       className="text-[11px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground block whitespace-pre-wrap break-words leading-snug max-w-[520px]"
-                      title={m.attributes.sql}
+                      title={m.attributes.sql || m.attributes.expression || ""}
                     >
-                      {truncate(m.attributes.sql.replace(/\s+/g, " "), 140)}
+                      {truncate((m.attributes.sql || m.attributes.expression || "").replace(/\s+/g, " "), 140)}
                     </code>
                   </td>
                   <td className="px-3 py-2.5 align-top font-mono text-[10px] text-muted-foreground">
@@ -259,11 +309,12 @@ export function MetricsPage() {
         {showingCount === 0 && (
           <div className="text-center py-12 text-sm text-muted-foreground">
             No metrics match the current filter.
-            {(search || datasetFilter) && (
+            {(search || datasetFilter || modeFilter) && (
               <button
                 onClick={() => {
                   setSearch("");
                   setDatasetFilter("");
+                  setModeFilter("");
                 }}
                 className="ml-2 text-primary hover:underline"
               >
