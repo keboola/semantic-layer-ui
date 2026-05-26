@@ -1,5 +1,7 @@
 import { useParams, Link, useNavigate } from "react-router";
 import { useMetric, useUpdateMetric, useDeleteMetric } from "@/hooks/use-metrics";
+import { useDatasets } from "@/hooks/use-datasets";
+import { useModel } from "@/providers/model-context";
 import { ArrowLeft, Save, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
@@ -9,6 +11,8 @@ import { sql } from "@codemirror/lang-sql";
 export function MetricDetailPage() {
   const { uuid } = useParams<{ uuid: string }>();
   const { data: metric, isLoading } = useMetric(uuid || "");
+  const { modelUUID } = useModel();
+  const { data: datasets } = useDatasets(modelUUID);
   const navigate = useNavigate();
   const updateMetric = useUpdateMetric();
   const deleteMetric = useDeleteMetric();
@@ -56,12 +60,24 @@ export function MetricDetailPage() {
               </>
             )}
           </div>
-          {m.dataset && (
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Dataset:{" "}
-              <span className="font-mono">{m.dataset}</span>
-            </p>
-          )}
+          {m.dataset && (() => {
+            const dsObj = datasets?.find((d) => d.attributes.tableId === m.dataset);
+            return (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Dataset:{" "}
+                {dsObj ? (
+                  <Link
+                    to={`/datasets/${dsObj.id}`}
+                    className="font-mono text-primary hover:underline"
+                  >
+                    {m.dataset}
+                  </Link>
+                ) : (
+                  <span className="font-mono">{m.dataset}</span>
+                )}
+              </p>
+            );
+          })()}
         </div>
       </div>
 

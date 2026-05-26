@@ -4,16 +4,26 @@ import { useModel } from "@/providers/model-context";
 import { Link } from "react-router";
 import { truncate } from "@/lib/utils";
 import { RevisionBadge } from "@/components/shared/object-meta";
-import { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowUpDown, Plus, X } from "lucide-react";
 import CodeMirror from "@uiw/react-codemirror";
 import { sql } from "@codemirror/lang-sql";
+
+type SortKey = "name" | "dataset" | "updated";
+
+function shortDataset(tableId: string | undefined): string {
+  if (!tableId) return "-";
+  return tableId.split(".").pop() || tableId;
+}
 
 export function MetricsPage() {
   const { modelUUID } = useModel();
   const { data: metrics, isLoading } = useMetrics(modelUUID);
   const { data: datasets } = useDatasets(modelUUID);
   const [search, setSearch] = useState("");
+  const [datasetFilter, setDatasetFilter] = useState<string>("");
+  const [sortBy, setSortBy] = useState<SortKey>("name");
+  const [sortAsc, setSortAsc] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newSql, setNewSql] = useState("");
@@ -21,11 +31,46 @@ export function MetricsPage() {
   const [newDataset, setNewDataset] = useState("");
   const createMetric = useCreateMetric();
 
-  const filtered = metrics?.filter(
-    (m) =>
-      m.attributes.name.toLowerCase().includes(search.toLowerCase()) ||
-      (m.attributes.description || "").toLowerCase().includes(search.toLowerCase())
-  );
+  const datasetCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const m of metrics || []) {
+      const key = m.attributes.dataset || "__none__";
+      counts[key] = (counts[key] || 0) + 1;
+    }
+    return counts;
+  }, [metrics]);
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    let result = (metrics || []).filter((m) => {
+      if (datasetFilter && (m.attributes.dataset || "") !== datasetFilter) return false;
+      if (!q) return true;
+      return (
+        m.attributes.name.toLowerCase().includes(q) ||
+        (m.attributes.description || "").toLowerCase().includes(q) ||
+        m.attributes.sql.toLowerCase().includes(q)
+      );
+    });
+
+    result = [...result].sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === "name") cmp = a.attributes.name.localeCompare(b.attributes.name);
+      else if (sortBy === "dataset")
+        cmp = shortDataset(a.attributes.dataset).localeCompare(shortDataset(b.attributes.dataset));
+      else if (sortBy === "updated") cmp = a.meta.lastUpdated.localeCompare(b.meta.lastUpdated);
+      return sortAsc ? cmp : -cmp;
+    });
+
+    return result;
+  }, [metrics, search, datasetFilter, sortBy, sortAsc]);
+
+  function toggleSort(key: SortKey) {
+    if (sortBy === key) setSortAsc(!sortAsc);
+    else {
+      setSortBy(key);
+      setSortAsc(true);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -37,22 +82,46 @@ export function MetricsPage() {
     );
   }
 
+  const total = metrics?.length || 0;
+  const showingCount = filtered?.length || 0;
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-lg font-semibold">
           Metrics{" "}
           <span className="text-muted-foreground font-normal text-sm">
-            ({filtered?.length || 0})
+            ({showingCount}
+            {showingCount !== total && ` of ${total}`})
           </span>
         </h2>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <select
+            value={datasetFilter}
+            onChange={(e) => setDatasetFilter(e.target.value)}
+            className="px-2 py-1.5 text-sm border border-input rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+            title="Filter by dataset"
+          >
+            <option value="">All datasets ({total})</option>
+            {datasets?.map((d) => {
+              const count = datasetCounts[d.attributes.tableId] || 0;
+              if (count === 0) return null;
+              return (
+                <option key={d.id} value={d.attributes.tableId}>
+                  {d.attributes.name} ({count})
+                </option>
+              );
+            })}
+            {datasetCounts["__none__"] ? (
+              <option value="__none__">(no dataset) ({datasetCounts["__none__"]})</option>
+            ) : null}
+          </select>
           <input
             type="text"
-            placeholder="Search metrics..."
+            placeholder="Search name, SQL, description..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="px-3 py-1.5 text-sm border border-input rounded-md bg-background w-64 focus:outline-none focus:ring-1 focus:ring-ring"
+            className="px-3 py-1.5 text-sm border border-input rounded-md bg-background w-72 focus:outline-none focus:ring-1 focus:ring-ring"
           />
           <button
             onClick={() => setShowCreate(true)}
@@ -116,46 +185,93 @@ export function MetricsPage() {
         <table className="w-full text-sm min-w-[700px]">
           <thead>
             <tr className="bg-muted/50 border-b border-border">
-              <th className="text-left px-3 py-2 font-medium w-[160px]">Name</th>
+              <th
+                className="text-left px-3 py-2 font-medium w-[200px] cursor-pointer hover:text-primary"
+                onClick={() => toggleSort("name")}
+              >
+                Name {sortBy === "name" && <ArrowUpDown className="h-3 w-3 inline ml-0.5" />}
+              </th>
               <th className="text-left px-3 py-2 font-medium">SQL</th>
-              <th className="text-left px-3 py-2 font-medium w-[140px]">Dataset</th>
-              <th className="text-right px-3 py-2 font-medium w-[120px]">Version</th>
+              <th
+                className="text-left px-3 py-2 font-medium w-[160px] cursor-pointer hover:text-primary"
+                onClick={() => toggleSort("dataset")}
+              >
+                Dataset {sortBy === "dataset" && <ArrowUpDown className="h-3 w-3 inline ml-0.5" />}
+              </th>
+              <th
+                className="text-right px-3 py-2 font-medium w-[120px] cursor-pointer hover:text-primary"
+                onClick={() => toggleSort("updated")}
+              >
+                Version {sortBy === "updated" && <ArrowUpDown className="h-3 w-3 inline ml-0.5" />}
+              </th>
             </tr>
           </thead>
           <tbody>
-            {filtered?.map((m) => (
-              <tr
-                key={m.id}
-                className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
-              >
-                <td className="px-3 py-2.5">
-                  <Link
-                    to={`/metrics/${m.id}`}
-                    className="font-medium text-primary hover:underline block"
-                  >
-                    {m.attributes.name}
-                  </Link>
-                  {m.attributes.description && (
-                    <span className="text-[10px] text-muted-foreground">
-                      {truncate(m.attributes.description, 60)}
-                    </span>
-                  )}
-                </td>
-                <td className="px-3 py-2.5">
-                  <code className="text-[11px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
-                    {truncate(m.attributes.sql, 60)}
-                  </code>
-                </td>
-                <td className="px-3 py-2.5 font-mono text-[10px] text-muted-foreground">
-                  {m.attributes.dataset ? m.attributes.dataset.split(".").pop() : "-"}
-                </td>
-                <td className="px-3 py-2.5 text-right">
-                  <RevisionBadge revision={m.meta.revision} updatedAt={m.meta.lastUpdated} />
-                </td>
-              </tr>
-            ))}
+            {filtered?.map((m) => {
+              const ds = m.attributes.dataset;
+              const dsObj = ds ? datasets?.find((d) => d.attributes.tableId === ds) : undefined;
+              return (
+                <tr
+                  key={m.id}
+                  className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
+                >
+                  <td className="px-3 py-2.5 align-top">
+                    <Link
+                      to={`/metrics/${m.id}`}
+                      className="font-medium text-primary hover:underline block"
+                    >
+                      {m.attributes.name}
+                    </Link>
+                    {m.attributes.description && (
+                      <span className="text-[10px] text-muted-foreground block leading-tight mt-0.5">
+                        {truncate(m.attributes.description, 80)}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5 align-top">
+                    <code
+                      className="text-[11px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground block whitespace-pre-wrap break-words leading-snug max-w-[520px]"
+                      title={m.attributes.sql}
+                    >
+                      {truncate(m.attributes.sql.replace(/\s+/g, " "), 140)}
+                    </code>
+                  </td>
+                  <td className="px-3 py-2.5 align-top font-mono text-[10px] text-muted-foreground">
+                    {dsObj ? (
+                      <Link
+                        to={`/datasets/${dsObj.id}`}
+                        className="hover:text-primary hover:underline"
+                      >
+                        {shortDataset(ds)}
+                      </Link>
+                    ) : (
+                      shortDataset(ds)
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5 text-right align-top">
+                    <RevisionBadge revision={m.meta.revision} updatedAt={m.meta.lastUpdated} />
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
+        {showingCount === 0 && (
+          <div className="text-center py-12 text-sm text-muted-foreground">
+            No metrics match the current filter.
+            {(search || datasetFilter) && (
+              <button
+                onClick={() => {
+                  setSearch("");
+                  setDatasetFilter("");
+                }}
+                className="ml-2 text-primary hover:underline"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
