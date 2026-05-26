@@ -10,22 +10,36 @@ import type { MetastoreObject, SemanticMetric, SemanticRelationship } from "@/li
 export function StructuredMetricForm({
   modelUUID,
   onClose,
+  initial,
+  onSubmit,
+  submitLabel = "Create Metric",
 }: {
   modelUUID: string;
   onClose: () => void;
+  initial?: {
+    name?: string;
+    description?: string;
+    datasets?: string[];
+    grain?: string;
+    expression?: string;
+    dependsOn?: string[];
+    joinPath?: string[];
+  };
+  onSubmit?: (payload: SemanticMetric) => void;
+  submitLabel?: string;
 }) {
   const { data: datasets } = useDatasets(modelUUID);
   const { data: metrics } = useMetrics(modelUUID);
   const { data: relationships } = useRelationships(modelUUID);
   const createMetric = useCreateMetric();
 
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [selectedDatasets, setSelectedDatasets] = useState<string[]>([]);
-  const [grain, setGrain] = useState("");
-  const [expression, setExpression] = useState("");
-  const [dependsOn, setDependsOn] = useState<string[]>([]);
-  const [joinPath, setJoinPath] = useState<string[]>([]);
+  const [name, setName] = useState(initial?.name ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [selectedDatasets, setSelectedDatasets] = useState<string[]>(initial?.datasets ?? []);
+  const [grain, setGrain] = useState(initial?.grain ?? "");
+  const [expression, setExpression] = useState(initial?.expression ?? "");
+  const [dependsOn, setDependsOn] = useState<string[]>(initial?.dependsOn ?? []);
+  const [joinPath, setJoinPath] = useState<string[]>(initial?.joinPath ?? []);
 
   // Auto-extract referenced metric names from expression (matches `<name>.v`)
   const referencedNames = useMemo(() => {
@@ -60,6 +74,10 @@ export function StructuredMetricForm({
       dependsOn,
       joinPath: joinPath.length > 0 ? joinPath : undefined,
     };
+    if (onSubmit) {
+      onSubmit(payload);
+      return;
+    }
     createMetric.mutate(payload, { onSuccess: () => onClose() });
   }
 
@@ -149,7 +167,7 @@ export function StructuredMetricForm({
           disabled={!canSubmit || createMetric.isPending}
           className="px-4 py-1.5 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
         >
-          {createMetric.isPending ? "Creating..." : "Create Metric"}
+          {createMetric.isPending ? "Saving..." : submitLabel}
         </button>
       </div>
 

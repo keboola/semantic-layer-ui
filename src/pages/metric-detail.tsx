@@ -9,6 +9,7 @@ import { ObjectMetaPanel } from "@/components/shared/object-meta";
 import { sql } from "@codemirror/lang-sql";
 import { cn } from "@/lib/utils";
 import { STRUCTURED_METRICS_ENABLED } from "@/lib/constants";
+import { ConvertToStructuredPanel } from "@/components/metrics/convert-to-structured-panel";
 
 export function MetricDetailPage() {
   const { uuid } = useParams<{ uuid: string }>();
@@ -21,6 +22,7 @@ export function MetricDetailPage() {
   const deleteMetric = useDeleteMetric();
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showConvert, setShowConvert] = useState(false);
   const [editSql, setEditSql] = useState("");
   const [editDesc, setEditDesc] = useState("");
 
@@ -78,6 +80,15 @@ export function MetricDetailPage() {
               <>
                 <button onClick={startEdit} className="text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
                 <button onClick={() => setConfirmDelete(true)} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                {STRUCTURED_METRICS_ENABLED && m.mode !== "structured" && (
+                  <button
+                    onClick={() => setShowConvert(true)}
+                    className="text-[10px] px-2 py-0.5 border border-border rounded hover:bg-accent text-muted-foreground"
+                    title="Convert this raw metric into structured mode"
+                  >
+                    Convert to structured
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -241,6 +252,13 @@ export function MetricDetailPage() {
 
       {/* Metadata */}
       <ObjectMetaPanel meta={metric.meta} uuid={metric.id} />
+
+      {showConvert && (
+        <ConvertToStructuredPanel
+          metric={metric}
+          onClose={() => setShowConvert(false)}
+        />
+      )}
     </div>
   );
 }
