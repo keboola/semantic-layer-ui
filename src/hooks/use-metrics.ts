@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
-import { getObject, createObject, updateObject, deleteObject } from "@/lib/api-client";
+import { getObject, createObject, updateObject, deleteObject, getCompiledMetric } from "@/lib/api-client";
 import { useModelObjects } from "./use-all-objects";
-import type { SemanticMetric } from "@/lib/types";
+import type { SemanticMetric, CompiledMetricResponse } from "@/lib/types";
 
 export function useMetrics(modelUUID: string) {
   const { data, ...rest } = useModelObjects(modelUUID);
@@ -12,6 +12,14 @@ export function useMetric(uuid: string) {
   return useQuery({
     queryKey: ["metric", uuid],
     queryFn: () => getObject<SemanticMetric>("semantic-metric", uuid),
+    enabled: !!uuid,
+  });
+}
+
+export function useCompiledMetric(uuid: string) {
+  return useQuery<CompiledMetricResponse>({
+    queryKey: ["compiled-metric", uuid],
+    queryFn: () => getCompiledMetric(uuid),
     enabled: !!uuid,
   });
 }
