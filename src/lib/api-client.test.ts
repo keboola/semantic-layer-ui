@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { getCompiledMetric } from "./api-client";
+import { createObject, getCompiledMetric } from "./api-client";
+import type { SemanticMetric } from "./types";
 
 describe("getCompiledMetric", () => {
   beforeEach(() => {
@@ -29,5 +30,46 @@ describe("getCompiledMetric", () => {
       text: async () => '{"error":"cycle_detected"}',
     });
     await expect(getCompiledMetric("bad")).rejects.toThrow(/cycle_detected/);
+  });
+});
+
+describe("createObject — structured-mode round trip", () => {
+  beforeEach(() => {
+    global.fetch = vi.fn();
+  });
+
+  it("preserves structured-mode fields verbatim in the POST body", async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: { type: "semantic-metric", id: "new_uuid", attributes: {}, meta: {} },
+      }),
+    });
+
+    const payload: SemanticMetric = {
+      modelUUID: "m",
+      name: "revenue",
+      mode: "structured",
+      datasets: ["customers", "orders"],
+      grain: "customers.id",
+      expression: "SUM(orders.amount)",
+      dependsOn: ["rev_dep_uuid"],
+      joinPath: ["rel_co_uuid"],
+    };
+    await createObject<SemanticMetric>(
+      "semantic-metric",
+      "revenue",
+      payload as unknown as Record<string, unknown>,
+    );
+
+    const call = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(call[1].method).toBe("POST");
+    const body = JSON.parse(call[1].body);
+    expect(body.data.mode).toBe("structured");
+    expect(body.data.datasets).toEqual(["customers", "orders"]);
+    expect(body.data.grain).toBe("customers.id");
+    expect(body.data.expression).toBe("SUM(orders.amount)");
+    expect(body.data.dependsOn).toEqual(["rev_dep_uuid"]);
+    expect(body.data.joinPath).toEqual(["rel_co_uuid"]);
   });
 });
