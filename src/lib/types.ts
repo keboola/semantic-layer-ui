@@ -64,12 +64,26 @@ export interface SemanticDataset {
 }
 
 // --- Semantic Metric ---
+export type MetricMode = "raw" | "structured";
+
 export interface SemanticMetric {
   modelUUID: string;
   name: string;
   description?: string;
-  sql: string;
-  dataset?: string; // tableId reference
+
+  // Discriminator
+  mode?: MetricMode;
+
+  // Raw mode (existing 114 metrics)
+  sql?: string;
+  dataset?: string;
+
+  // Structured mode (new)
+  datasets?: string[];
+  grain?: string;
+  expression?: string;
+  dependsOn?: string[]; // metric UUIDs
+  joinPath?: string[];  // relationship UUIDs
 }
 
 // --- Semantic Relationship ---
@@ -161,4 +175,18 @@ export interface ModelSummary {
   relationshipCount: number;
   glossaryCount: number;
   constraintCount: number;
+}
+
+export interface CompiledEnvelope {
+  sql: string;
+  dialect: "Snowflake" | "BigQuery";
+  dependsOn: string[];
+  joinsUsed: string[];
+  warnings: { code: string; message: string }[];
+  compiledVersion: number;
+}
+
+export interface CompiledMetricResponse {
+  data: MetastoreObject<SemanticMetric>;
+  compiled?: CompiledEnvelope;
 }
