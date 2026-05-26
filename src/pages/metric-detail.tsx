@@ -7,6 +7,7 @@ import { useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { ObjectMetaPanel } from "@/components/shared/object-meta";
 import { sql } from "@codemirror/lang-sql";
+import { cn } from "@/lib/utils";
 
 export function MetricDetailPage() {
   const { uuid } = useParams<{ uuid: string }>();
@@ -53,6 +54,16 @@ export function MetricDetailPage() {
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-semibold">{m.name}</h2>
+            <span
+              className={cn(
+                "text-[10px] uppercase font-mono px-1.5 py-0.5 rounded",
+                m.mode === "structured"
+                  ? "bg-emerald-100 text-emerald-800"
+                  : "bg-muted text-muted-foreground",
+              )}
+            >
+              {m.mode ?? "raw"}
+            </span>
             {!editing && (
               <>
                 <button onClick={startEdit} className="text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
@@ -78,6 +89,29 @@ export function MetricDetailPage() {
               </p>
             );
           })()}
+          {m.mode === "structured" && m.datasets && m.datasets.length > 0 && (
+            <div className="mt-2">
+              <h3 className="text-xs font-medium text-muted-foreground mb-1">Reads from</h3>
+              <div className="flex gap-1.5 flex-wrap">
+                {m.datasets.map((tid) => {
+                  const ds = datasets?.find((d) => d.attributes.tableId === tid);
+                  return ds ? (
+                    <Link
+                      key={tid}
+                      to={`/datasets/${ds.id}`}
+                      className="text-[11px] font-mono bg-muted px-2 py-0.5 rounded hover:bg-accent hover:underline"
+                    >
+                      {tid}
+                    </Link>
+                  ) : (
+                    <span key={tid} className="text-[11px] font-mono bg-muted px-2 py-0.5 rounded">
+                      {tid}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
