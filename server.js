@@ -27,8 +27,20 @@ const upload = multer
 app.use(express.json({ limit: "10mb" }));
 
 // Env vars
-const METASTORE_URL =
-  (process.env.METASTORE_URL || "https://metastore.us-east4.gcp.keboola.com").trim();
+// The Metastore lives on the SAME stack as Storage. Derive its URL from KBC_URL
+// (connection.<stack>.keboola.com -> metastore.<stack>.keboola.com) so the app targets
+// the correct per-stack Metastore automatically, without needing an explicit METASTORE_URL.
+// Without this, non-us-east4 stacks (e.g. europe-west3.gcp, north-europe.azure) silently
+// hit the wrong/empty Metastore and no models show up. Explicit METASTORE_URL still wins.
+function deriveMetastoreUrl() {
+  const explicit = (process.env.METASTORE_URL || "").trim();
+  if (explicit) return explicit;
+  const kbc = (process.env.KBC_URL || "").trim();
+  const m = kbc.match(/^https?:\/\/connection\.(.+?)\/?$/);
+  if (m) return `https://metastore.${m[1]}`;
+  return "https://metastore.us-east4.gcp.keboola.com"; // last-resort fallback
+}
+const METASTORE_URL = deriveMetastoreUrl();
 const KBC_TOKEN = (process.env.KBC_METASTORE_TOKEN || process.env.KBC_TOKEN || "").trim();
 
 // ─── Health & Auth ───────────────────────────────────────────────────────────
