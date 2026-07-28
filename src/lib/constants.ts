@@ -34,3 +34,9 @@ export const NAV_ITEMS = [
   { label: "Glossary", path: "/glossary", icon: "BookOpen" },
   { label: "Constraints", path: "/constraints", icon: "ShieldCheck" },
 ] as const;
+
+// Gates the structured-metric authoring UI + the ?expanded=true calls until
+// metastore PR 1 is in production. Toggle via VITE_STRUCTURED_METRICS=1 at
+// build time, or flip the default once PR 1 ships.
+export const STRUCTURED_METRICS_ENABLED =
+  import.meta.env.VITE_STRUCTURED_METRICS === "1";

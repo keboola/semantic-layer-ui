@@ -1,4 +1,4 @@
-import type { MetastoreObject, SemanticObjectType } from "./types";
+import type { MetastoreObject, SemanticObjectType, CompiledMetricResponse } from "./types";
 
 const TOKEN_KEY = "metastore-token";
 
@@ -186,4 +186,15 @@ export async function deleteObject(
   if (!resp.ok) {
     throw new Error(`Delete ${objectType}/${uuid} failed: ${resp.status}`);
   }
+}
+
+export async function getCompiledMetric(uuid: string): Promise<CompiledMetricResponse> {
+  const resp = await fetch(`/api/v1/repository/semantic-metric/${uuid}?expanded=true`, {
+    headers: headers(),
+  });
+  if (!resp.ok) {
+    const errBody = await resp.text();
+    throw new Error(`getCompiledMetric(${uuid}) failed (${resp.status}): ${errBody}`);
+  }
+  return resp.json();
 }

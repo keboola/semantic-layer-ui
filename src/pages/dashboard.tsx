@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useModels, useModelDetail } from "@/hooks/use-models";
 import { useModel } from "@/providers/model-context";
 import { deleteObject } from "@/lib/api-client";
@@ -115,6 +115,12 @@ export function DashboardPage() {
 
   const model = models?.find((m) => m.id === modelUUID);
 
+  useEffect(() => {
+    if (!model && models && models.length > 0) {
+      setModelUUID(models[0].id);
+    }
+  }, [model, models, setModelUUID]);
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -135,10 +141,6 @@ export function DashboardPage() {
         </p>
       </div>
     );
-  }
-
-  if (!model && models && models.length > 0) {
-    setModelUUID(models[0].id);
   }
 
   if (!model) {

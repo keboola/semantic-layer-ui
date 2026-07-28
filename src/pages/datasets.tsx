@@ -9,12 +9,16 @@ import { ArrowUpDown } from "lucide-react";
 
 type SortKey = "name" | "fields" | "updated";
 
+const ROLE_FILTER_OPTIONS = ["key", "dimension", "measure", "timestamp"] as const;
+type RoleFilter = (typeof ROLE_FILTER_OPTIONS)[number];
+
 export function DatasetsPage() {
   const { modelUUID } = useModel();
   const { data: datasets, isLoading } = useDatasets(modelUUID);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("name");
   const [sortAsc, setSortAsc] = useState(true);
+  const [roleFilter, setRoleFilter] = useState<RoleFilter | "">("");
 
   function toggleSort(key: SortKey) {
     if (sortBy === key) setSortAsc(!sortAsc);
@@ -22,12 +26,21 @@ export function DatasetsPage() {
   }
 
   const filtered = useMemo(() => {
-    let result = datasets?.filter(
-      (d) =>
-        d.attributes.name.toLowerCase().includes(search.toLowerCase()) ||
-        d.attributes.tableId.toLowerCase().includes(search.toLowerCase()) ||
-        (d.attributes.description || "").toLowerCase().includes(search.toLowerCase())
-    ) || [];
+    const q = search.toLowerCase();
+    let result = (datasets || []).filter((d) => {
+      if (
+        roleFilter &&
+        !(d.attributes.fields || []).some((f) => f.role === roleFilter)
+      ) {
+        return false;
+      }
+      if (!q) return true;
+      return (
+        d.attributes.name.toLowerCase().includes(q) ||
+        d.attributes.tableId.toLowerCase().includes(q) ||
+        (d.attributes.description || "").toLowerCase().includes(q)
+      );
+    });
 
     result = [...result].sort((a, b) => {
       let cmp = 0;
@@ -38,7 +51,7 @@ export function DatasetsPage() {
     });
 
     return result;
-  }, [datasets, search, sortBy, sortAsc]);
+  }, [datasets, search, roleFilter, sortBy, sortAsc]);
 
   if (isLoading) {
     return (
@@ -52,20 +65,49 @@ export function DatasetsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-lg font-semibold">
           Datasets{" "}
           <span className="text-muted-foreground font-normal text-sm">
-            ({filtered?.length || 0})
+            ({filtered?.length || 0}
+            {(datasets?.length || 0) !== (filtered?.length || 0) && ` of ${datasets?.length || 0}`})
           </span>
         </h2>
-        <input
-          type="text"
-          placeholder="Search datasets..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="px-3 py-1.5 text-sm border border-input rounded-md bg-background w-64 focus:outline-none focus:ring-1 focus:ring-ring"
-        />
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-muted-foreground">Has role:</span>
+            <button
+              onClick={() => setRoleFilter("")}
+              className={cn(
+                "text-[11px] px-2 py-0.5 rounded border",
+                roleFilter === "" ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-accent"
+              )}
+            >
+              all
+            </button>
+            {ROLE_FILTER_OPTIONS.map((r) => (
+              <button
+                key={r}
+                onClick={() => setRoleFilter(roleFilter === r ? "" : r)}
+                className={cn(
+                  "text-[11px] px-2 py-0.5 rounded border",
+                  roleFilter === r
+                    ? ROLE_COLORS[r]
+                    : "border-border hover:bg-accent text-muted-foreground"
+                )}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+          <input
+            type="text"
+            placeholder="Search datasets..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="px-3 py-1.5 text-sm border border-input rounded-md bg-background w-64 focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
       </div>
 
       <div className="border border-border rounded-lg overflow-x-auto">

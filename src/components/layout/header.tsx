@@ -1,7 +1,7 @@
 import { useModels } from "@/hooks/use-models";
 import { useModel } from "@/providers/model-context";
 import { CommandPalette } from "@/components/search/command-palette";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Database } from "lucide-react";
 import { useEffect } from "react";
 
 export function Header() {
@@ -15,9 +15,27 @@ export function Header() {
   }, [modelUUID, models, setModelUUID]);
 
   const currentModel = models?.find((m) => m.id === modelUUID);
+  const projectId = currentModel?.meta.projectId;
+  const branch = currentModel?.meta.branch;
 
   return (
     <header className="h-12 border-b border-border flex items-center px-4 gap-4 bg-background">
+      {projectId !== undefined && (
+        <div
+          className="flex items-center gap-1.5 text-xs text-muted-foreground"
+          title={`Metastore project · org ${currentModel?.meta.organizationId ?? "?"}`}
+        >
+          <Database className="h-3.5 w-3.5" />
+          <span className="font-mono">project {projectId}</span>
+          {branch && branch !== "main" && (
+            <span className="font-mono text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
+              {branch}
+            </span>
+          )}
+          <span className="text-border">·</span>
+        </div>
+      )}
+
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground">Model:</span>
         <div className="relative">
