@@ -73,21 +73,50 @@ export async function introspectProject(options = {}) {
   };
 }
 
-async function fetchSingleTable(tableId, token, storageUrl) {
-  const t = await storageGet(`/tables/${tableId}`, token, storageUrl);
+function plainObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+/**
+ * Build the column list of a Storage table detail.
+ *
+ * Descriptions come from the native definition (definition.columns[].definition.description).
+ * Types of a typed table (isTyped) come from the definition as well (type, basetype);
+ * a non-typed table has no types in its definition, so they stay on the KBC.datatype.*
+ * rows of columnMetadata.
+ */
+export function columnsFromTable(t) {
+  const definitionColumns = {};
+  for (const dc of plainObject(t.definition).columns || []) {
+    if (dc && dc.name) definitionColumns[dc.name] = dc;
+  }
+  const colMetadata = plainObject(t.columnMetadata);
 
   const columns = [];
-  const colMetadata = t.columnMetadata || {};
   for (const colName of t.columns || []) {
     const col = { name: colName };
-    const meta = colMetadata[colName] || [];
-    for (const m of meta) {
-      if (m.key === "KBC.datatype.type") col.nativeType = m.value;
-      else if (m.key === "KBC.datatype.basetype") col.baseType = m.value;
-      else if (m.key === "KBC.description") col.description = m.value;
+    const dc = definitionColumns[colName] || {};
+    const dcDefinition = plainObject(dc.definition);
+    if (dcDefinition.description) col.description = dcDefinition.description;
+
+    if (t.isTyped) {
+      if (dcDefinition.type) col.nativeType = dcDefinition.type;
+      if (dc.basetype) col.baseType = dc.basetype;
+    } else {
+      for (const m of colMetadata[colName] || []) {
+        if (m.key === "KBC.datatype.type") col.nativeType = m.value;
+        else if (m.key === "KBC.datatype.basetype") col.baseType = m.value;
+      }
     }
     columns.push(col);
   }
+  return columns;
+}
+
+async function fetchSingleTable(tableId, token, storageUrl) {
+  const t = await storageGet(`/tables/${tableId}`, token, storageUrl);
+
+  const columns = columnsFromTable(t);
 
   const bucketInfo = t.bucket || {};
   const bucketId =
@@ -98,7 +127,7 @@ async function fetchSingleTable(tableId, token, storageUrl) {
   return {
     id: tableId,
     name: t.name || "",
-    description: t.description || "",
+    description: plainObject(t.definition).description || "",
     primaryKey: t.primaryKey || [],
     columns,
     rowsCount: t.rowsCount || 0,
